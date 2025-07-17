@@ -40,19 +40,21 @@ local categories = {
 
 local mainMenu = nil
 local menuPool = NativeUI.CreatePool()
+local controlsBlockedThread = nil
 
 local markerDrawDistance = 50.0
 local markerInteractDistance = 2.0
 
 Citizen.CreateThread(function()
     while true do
-        Wait(1)
         local playerCoords = GetEntityCoords(PlayerPedId())
+        local sleep = 1000
 
         for _, marker in ipairs(weaponMarkers) do
             local dist = #(playerCoords - vector3(marker.x, marker.y, marker.z))
-			
+
             if dist < markerDrawDistance then
+                sleep = 1
                 DrawMarker(1, marker.x, marker.y, marker.z - 1.0, 0.0, 0.0, 0.0, 0, 0, 0,
                     1.2, 1.2, 1.0, 255, 0, 0, 100, false, true, 2, nil, nil, false)
 
@@ -66,6 +68,7 @@ Citizen.CreateThread(function()
         end
 
         menuPool:ProcessMenus()
+        Wait(sleep)
     end
 end)
 
@@ -97,7 +100,7 @@ function OpenWeaponShop()
         for _, weaponName in ipairs(weapons) do
             if not excludedWeapons[weaponName] then
                 local weaponHash = GetHashKey(weaponName)
-                local damage = math.floor(GetWeaponDamage(weaponHash))
+                local damage = GetWeaponDamage(weaponName)
                 local item = NativeUI.CreateItem(weaponName, "Damage: " .. damage)
                 item.Activated = function(sender, item)
                     GiveWeaponToPed(PlayerPedId(), weaponHash, 250, false, true)
@@ -108,12 +111,15 @@ function OpenWeaponShop()
         end
     end
 
+    menuPool:RefreshIndex()
     mainMenu:Visible(true)
     BlockControlsWhileMenuOpen()
 end
 
 function BlockControlsWhileMenuOpen()
-    Citizen.CreateThread(function()
+    if controlsBlockedThread then return end
+
+    controlsBlockedThread = Citizen.CreateThread(function()
         while mainMenu and mainMenu:Visible() do
             DisableControlAction(0, 1, true)   -- Look left/right
             DisableControlAction(0, 2, true)   -- Look up/down
@@ -122,11 +128,27 @@ function BlockControlsWhileMenuOpen()
             DisableControlAction(0, 31, true)  -- Move forward/back
             Wait(0)
         end
+        controlsBlockedThread = nil
     end)
 end
 
-function GetWeaponDamage(weaponHash)
-    local dmg = GetWeaponComponentDamageModifier(weaponHash) or 0.0
-    if dmg == 0.0 then dmg = 30.0 end
-    return dmg
+function GetWeaponDamage(weaponName)
+    local defaultDamages = {
+        ["WEAPON_PISTOL"] = 26,
+        ["WEAPON_COMBATPISTOL"] = 27,
+        ["WEAPON_APPISTOL"] = 28,
+        ["WEAPON_PISTOL50"] = 32,
+        ["WEAPON_MICROSMG"] = 20,
+        ["WEAPON_SMG"] = 22,
+        ["WEAPON_MINISMG"] = 23,
+        ["WEAPON_ASSAULTRIFLE"] = 30,
+        ["WEAPON_CARBINERIFLE"] = 32,
+        ["WEAPON_SPECIALCARBINE"] = 33,
+        ["WEAPON_SNIPERRIFLE"] = 101,
+        ["WEAPON_HEAVYSNIPER"] = 157,
+        ["WEAPON_PUMPSHOTGUN"] = 40,
+        ["WEAPON_SAWNOFFSHOTGUN"] = 50
+    }
+
+    return defaultDamages[weaponName] or "N/A"
 end
